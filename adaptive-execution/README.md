@@ -100,7 +100,7 @@ git clone https://github.com/viniciusvdias/spark-adaptive-exec
 2. Build all projects
 
 ```
-cd spark-adaptive-exec && sbt clean assembly
+cd spark-adaptive-exec && ./build/sbt clean assembly
 ```
 
 3. Specify a sample log and run the Eclat algorithm. Note that we can instead pass the log configuration by command line:
