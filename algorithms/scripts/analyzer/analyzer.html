@@ -1,0 +1,129 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module analyzer</title>
+<meta charset="utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>analyzer</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/viniciusvdias/Dropbox/projects/spark-alg-repo/scripts/analyzer/analyzer.py">/home/viniciusvdias/Dropbox/projects/spark-alg-repo/scripts/analyzer/analyzer.py</a></font></td></tr></table>
+    <p></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="actions.html">actions</a><br>
+<a href="json.html">json</a><br>
+</td><td width="25%" valign=top><a href="logging.html">logging</a><br>
+<a href="math.html">math</a><br>
+</td><td width="25%" valign=top><a href="numpy.html">numpy</a><br>
+<a href="sparkmodel.html">sparkmodel</a><br>
+</td><td width="25%" valign=top><a href="sys.html">sys</a><br>
+</td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ee77aa">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Classes</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl>
+<dt><font face="helvetica, arial"><a href="analyzer.html#Analyzer">Analyzer</a>
+</font></dt></dl>
+ <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Analyzer">class <strong>Analyzer</strong></a></font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>This&nbsp;is&nbsp;the&nbsp;base&nbsp;class&nbsp;for&nbsp;analyzing&nbsp;an&nbsp;spark&nbsp;execution&nbsp;through&nbsp;its&nbsp;logs.&nbsp;The<br>
+user&nbsp;can&nbsp;create&nbsp;add&nbsp;policies&nbsp;and&nbsp;redefine&nbsp;some&nbsp;criteria&nbsp;employed&nbsp;here.<br>
+Specifically&nbsp;the&nbsp;user&nbsp;are&nbsp;encouraged&nbsp;to&nbsp;override&nbsp;the&nbsp;following&nbsp;methods:<br>
+&nbsp;<br>
+<a href="#Analyzer-correlation">correlation</a>(self,&nbsp;values1,&nbsp;values2):&nbsp;returns&nbsp;a&nbsp;correlation&nbsp;metric&nbsp;between&nbsp;two<br>
+sets&nbsp;of&nbsp;values&nbsp;(0&nbsp;&lt;=&nbsp;corr&nbsp;&lt;=&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;and<br>
+<a href="#Analyzer-highcorr">highcorr</a>(self,&nbsp;corr):&nbsp;returns&nbsp;true&nbsp;if&nbsp;'corr'&nbsp;must&nbsp;be&nbsp;considered&nbsp;a&nbsp;high<br>
+correlation,&nbsp;false&nbsp;otherwise<br>
+&nbsp;<br>
+<a href="#Analyzer-skewness">skewness</a>(self,&nbsp;values):&nbsp;returns&nbsp;a&nbsp;metric&nbsp;that&nbsp;represents&nbsp;the&nbsp;skewness&nbsp;of&nbsp;a<br>
+set&nbsp;of&nbsp;values.<br>
+&nbsp;&nbsp;&nbsp;and<br>
+<a href="#Analyzer-highskewness">highskewness</a>(self,skewness):&nbsp;returns&nbsp;true&nbsp;if&nbsp;'skewness'&nbsp;must&nbsp;be&nbsp;considered&nbsp;a<br>
+high&nbsp;skewness,&nbsp;false&nbsp;otherwise<br>
+&nbsp;<br>
+<a href="#Analyzer-get_opt_funcs">get_opt_funcs</a>(self):&nbsp;return&nbsp;new&nbsp;optimization&nbsp;policies&nbsp;defined&nbsp;by&nbsp;the&nbsp;user,<br>
+i.e,&nbsp;a&nbsp;list&nbsp;of&nbsp;functions&nbsp;with&nbsp;the&nbsp;following&nbsp;signature:<br>
+&nbsp;&nbsp;&nbsp;my_opt_policy(rdd,&nbsp;stages,&nbsp;analyzer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:param&nbsp;rdd:&nbsp;represents&nbsp;the&nbsp;adaptive&nbsp;point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:param&nbsp;stages:&nbsp;the&nbsp;stages&nbsp;that&nbsp;begin&nbsp;at&nbsp;this&nbsp;adaptive&nbsp;point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:param&nbsp;analyzer:&nbsp;this&nbsp;object&nbsp;for&nbsp;access&nbsp;to&nbsp;functions&nbsp;like&nbsp;correlation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;skewness<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Analyzer-__init__"><strong>__init__</strong></a>(self, filename)</dt></dl>
+
+<dl><dt><a name="Analyzer-correlation"><strong>correlation</strong></a>(self, values1, values2)</dt><dd><tt>Our&nbsp;default&nbsp;correlation&nbsp;considers&nbsp;Pearson&nbsp;correlation</tt></dd></dl>
+
+<dl><dt><a name="Analyzer-get_opt_funcs"><strong>get_opt_funcs</strong></a>(self)</dt><dd><tt>By&nbsp;default&nbsp;this&nbsp;returns&nbsp;an&nbsp;empty&nbsp;list&nbsp;but&nbsp;users&nbsp;are&nbsp;welcome&nbsp;to&nbsp;override<br>
+and&nbsp;include&nbsp;their&nbsp;own&nbsp;policies&nbsp;in&nbsp;that&nbsp;list</tt></dd></dl>
+
+<dl><dt><a name="Analyzer-get_opt_funcs_default"><strong>get_opt_funcs_default</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Analyzer-highcorr"><strong>highcorr</strong></a>(self, corr)</dt></dl>
+
+<dl><dt><a name="Analyzer-highskewness"><strong>highskewness</strong></a>(self, skewness)</dt></dl>
+
+<dl><dt><a name="Analyzer-opt_funcs"><strong>opt_funcs</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Analyzer-run"><strong>run</strong></a>(self)</dt><dd><tt>Starts&nbsp;the&nbsp;analyzer,&nbsp;parsing&nbsp;the&nbsp;logfile&nbsp;and&nbsp;applying&nbsp;the&nbsp;defined<br>
+policies.<br>
+Returns&nbsp;a&nbsp;dict&nbsp;with&nbsp;the&nbsp;list&nbsp;of&nbsp;actions&nbsp;(values)&nbsp;for&nbsp;each&nbsp;adaptive&nbsp;point<br>
+found&nbsp;in&nbsp;the&nbsp;code&nbsp;(keys).</tt></dd></dl>
+
+<dl><dt><a name="Analyzer-skewness"><strong>skewness</strong></a>(self, values)</dt><dd><tt>Our&nbsp;default&nbsp;measure&nbsp;for&nbsp;skewness&nbsp;considers&nbsp;the&nbsp;ratio&nbsp;between&nbsp;the&nbsp;max&nbsp;value&nbsp;and&nbsp;the<br>
+mean.&nbsp;Therefore,&nbsp;skewness&nbsp;close&nbsp;to&nbsp;1.0&nbsp;represent&nbsp;datasets&nbsp;with&nbsp;low&nbsp;skewness</tt></dd></dl>
+
+</td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#eeaa77">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl><dt><a name="-equiv_input"><strong>equiv_input</strong></a>(subset, superset)</dt><dd><tt>Verifies&nbsp;whether&nbsp;one&nbsp;set&nbsp;is&nbsp;subset&nbsp;of&nbsp;another,&nbsp;a.k.a.&nbsp;superset.</tt></dd></dl>
+ <dl><dt><a name="-get_json"><strong>get_json</strong></a>(line)</dt><dd><tt>Loads&nbsp;one&nbsp;json&nbsp;line&nbsp;(record).&nbsp;Returns&nbsp;the&nbsp;indexed&nbsp;structure.</tt></dd></dl>
+ <dl><dt><a name="-get_or_else"><strong>get_or_else</strong></a>(data, key, default_value<font color="#909090">=None</font>)</dt><dd><tt>Tries&nbsp;to&nbsp;get&nbsp;a&nbsp;value&nbsp;from&nbsp;data&nbsp;with&nbsp;key.&nbsp;Returns&nbsp;default_value&nbsp;in&nbsp;case&nbsp;of&nbsp;key<br>
+not&nbsp;found.</tt></dd></dl>
+ <dl><dt><a name="-is_iterative"><strong>is_iterative</strong></a>(adaptable)</dt><dd><tt>Returns&nbsp;the&nbsp;predicate&nbsp;"is&nbsp;iterative"&nbsp;for&nbsp;each&nbsp;adaptive&nbsp;point.</tt></dd></dl>
+ <dl><dt><a name="-is_regular"><strong>is_regular</strong></a>(adaptable)</dt><dd><tt>Returns&nbsp;the&nbsp;predicate&nbsp;"is&nbsp;regular"&nbsp;for&nbsp;each&nbsp;adaptive&nbsp;point.</tt></dd></dl>
+ <dl><dt><a name="-opt_app"><strong>opt_app</strong></a>(adaptable, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_iterative_irregular"><strong>opt_iterative_irregular</strong></a>(adaptable, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_iterative_regular"><strong>opt_iterative_regular</strong></a>(adaptable, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_noniterative"><strong>opt_noniterative</strong></a>(adaptable, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_stage"><strong>opt_stage</strong></a>(rdd, stages, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_stage_empty_task"><strong>opt_stage_empty_task</strong></a>(rdd, stages, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_stage_gc"><strong>opt_stage_gc</strong></a>(rdd, stages, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_stage_spill"><strong>opt_stage_spill</strong></a>(rdd, stages, analyzer)</dt></dl>
+ <dl><dt><a name="-opt_stage_task_imbalance"><strong>opt_stage_task_imbalance</strong></a>(rdd, stages, analyzer)</dt></dl>
+ <dl><dt><a name="-source_of_imbalance"><strong>source_of_imbalance</strong></a>(stage, analyzer)</dt><dd><tt>Returns&nbsp;the&nbsp;source&nbsp;of&nbsp;imbalance&nbsp;(or&nbsp;the&nbsp;lack&nbsp;of&nbsp;it)&nbsp;for&nbsp;task&nbsp;run&nbsp;times.</tt></dd></dl>
+</td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#55aa55">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><strong>BALANCED</strong> = 0<br>
+<strong>CORR_THRESHOLD_DEFAULT</strong> = 0.7<br>
+<strong>INHERENT</strong> = 1<br>
+<strong>KEY_DIST</strong> = 3<br>
+<strong>SKEWNESS_THRESHOLD_DEFAULT</strong> = 2<br>
+<strong>VARIABLE_COST</strong> = 2</td></tr></table>
+</body></html>
