@@ -85,7 +85,7 @@ object Wordcount {
 }
 ```
 
-Some algorithms in [Algorithms Project](https://github.com/viniciusvdias/spark-extensions) have been extended to support the tool.
+Some algorithms in [Algorithms Project](https://github.com/viniciusvdias/spark-extensions/tree/master/algorithms) have been extended to support the tool.
 
 ## Testing the included algorithms
 
