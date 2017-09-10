@@ -312,7 +312,6 @@ class Analyzer(logPath: String = "",
     logInfo (s"Imbalance skewness ${_skewness}")
     if (!highSkewness(_skewness)) return NoImbalance
 
-
     val corr1 = correlation (runTimes, stage.taskShuffleReadBytes)
     val corr2 = correlation (runTimes, stage.taskShuffleReadRecords)
     logInfo (s"Correlation between Runtime and ShuffleReadBytes: ${corr1}")

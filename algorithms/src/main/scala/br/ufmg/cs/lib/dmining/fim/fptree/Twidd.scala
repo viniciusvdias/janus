@@ -288,8 +288,8 @@ object Twidd {
     val conf = confOpt.getOrElse(new SparkConf().setAppName(appName))
     conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     conf.set("spark.kryo.registrator", "br.ufmg.cs.lib.dmining.fim.fptree.TreeOptRegistrator")
+    preAdapt (conf)
     val sc = new SparkContext(conf)
-    preAdapt (sc)
 
     // Start execution time
     var t0 = System.nanoTime

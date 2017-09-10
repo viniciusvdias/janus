@@ -1,0 +1,16 @@
+<aspectj>
+
+  <aspects>
+    <aspect name="br.ufmg.cs.systems.sparktuner.rdd.SparkContextInterceptor"/>
+    <aspect name="br.ufmg.cs.systems.sparktuner.rdd.RDDInterceptor"/>
+  </aspects>
+
+  <weaver options="-XnoInline -Xset:weaveJavaPackages=true,weaveJavaxPackages=true -verbose -showWeaveInfo">
+    <include within="org.apache.spark.*"/>
+    <include within="org.apache.spark.rdd.*"/>
+    <include within="org.apache.spark.graphx.*"/>
+    <include within="org.apache.spark.graphx.impl.*"/>
+    <include within="br.ufmg.cs.systems.sparktuner.rdd.*"/>
+  </weaver>
+
+</aspectj>

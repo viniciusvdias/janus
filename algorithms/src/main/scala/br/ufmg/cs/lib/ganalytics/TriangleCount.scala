@@ -10,24 +10,25 @@ import org.apache.spark.graphx.GraphLoader
 import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.Graph
 
-class ConnectedComponents (inputFile: String, numPartitions: Int,
+class TriangleCount(inputFile: String, numPartitions: Int,
     inputType: String) extends Logging {
 
   def run {
-    val conf = new SparkConf().setAppName("ConnectedComponents")
+    val conf = new SparkConf().setAppName("TriangleCount")
     val sc = new SparkContext(conf)
     sc.setLogLevel ("INFO")
 
-    val graph = ConnectedComponents.loadGraph (sc, inputFile, inputType,
+    val graph = TriangleCount.loadGraph (sc, inputFile, inputType,
       numPartitions)
-    val cc = graph.connectedComponents()
-    logInfo ("There are " + cc.vertices.count() + " components in the graph.")
+    val triCounts = graph.triangleCount()
+    logInfo ("There are " + triCounts.vertices.count() +
+      " triCounts in the graph.")
 
     sc.stop()
   }
 }
 
-object ConnectedComponents {
+object TriangleCount {
 
   val INPUT_EDGES = "edges"
   val INPUT_ADJLISTS = "adjLists"
@@ -49,6 +50,6 @@ object ConnectedComponents {
   }
 
   def main(args: Array[String]) {
-    new ConnectedComponents (args(0), args(1).toInt, args(2)).run
+    new TriangleCount (args(0), args(1).toInt, args(2)).run
   }
 }

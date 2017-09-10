@@ -11,121 +11,6 @@ import org.apache.spark.Partitioner.defaultPartitioner
 
 import scala.reflect.ClassTag
 
-trait Action extends Logging {
-  // we consider an RDD as possible adaptive points
-  def ap: String
-
-  // some action may be augmented or diminished by a factor
-  def scaled(factor: Double): Action = this
-
-  // only 'NoAction' by default is considered a non valid action
-  def valid = true
-
-  def actionApplied [T] (res: T): T = {
-    logInfo (s"${this}:${policySrc} was applied and produced: ${res}")
-    res
-  }
-
-  def max(other: Action): Action = this
-
-  private var _policySrc: String = ""
-
-  /**
-   * Policy name that originated this action
-   */
-  def policySrc: String = _policySrc
-
-  def setPolicySrc(os: String): Action = {
-    _policySrc = os
-    this
-  }
-
-  private var _oldNumPartitions: Int = _
-  private var _oldPartitioner: String = _
-
-  def oldNumPartitions: Int = _oldNumPartitions
-  def oldPartitioner: String = _oldPartitioner
-
-  def setOldNumPartitions(onp: Int): Action = {
-    _oldNumPartitions = onp
-    this
-  }
-
-  def setOldPartitioner(op: String): Action = {
-    _oldPartitioner = op
-    this
-  }
-
-  override def toString = {
-    s"(${policySrc}" +
-    s"${Option(oldNumPartitions).filter(_ > 0).map(n => "," + n.toString).getOrElse("")}" +
-    s"${Option(oldPartitioner).map(p => "," + p).getOrElse("")})"
-  }
-}
-
-/**
- * Applied when the number of partitions of an adaptive point must change based
- * on some criteria.
- */
-case class UNPAction(ap: String, numPartitions: Int) extends Action {
-  override def scaled(factor: Double): Action = {
-    val newNumPartitions = math.ceil (factor * numPartitions).toInt max 1
-    UNPAction (ap, newNumPartitions).
-      setPolicySrc (policySrc).
-      setOldNumPartitions (oldNumPartitions).
-      setOldPartitioner (oldPartitioner)
-  }
-
-  override def max(_other: Action): Action = _other match {
-    case other: UNPAction => List(this, other).maxBy (_.numPartitions)
-    case _ => super.max(_other)
-  }
-
-  override def toString = {
-    s"UNPAction(${ap},${numPartitions})${super.toString}"
-  }
-}
-
-/**
- * Applied when the partitioning strategy of some adaptive point must be
- * changed, like hashPartitioner -> rangePartitioner
- */
-case class UPAction(ap: String, partitionerStr: String) extends Action {
-  override def toString = {
-    s"UPAction(${ap},${partitionerStr})${super.toString}"
-  }
-}
-
-
-/**
- * Applied when there is nothing else to do regarding this adaptive point
- */
-case class NOAction(ap: String) extends Action {
-  override def valid = false
-
-  override def max(other: Action): Action = other
-
-  override def toString = {
-    s"NOAction(${ap})${super.toString}"
-  }
-}
-
-/**
- * This action only carry a warn message that is displayed to the user if
- * activated. We choose such approach in cases where no automatic
- * reconfiguration is known. Usually this means that we need an user direct
- * intervention.
- */
-case class WarnAction(ap: String, msg: String) extends Action {
-  override def valid = !msg.isEmpty
-
-  override def max(other: Action): Action = other
-
-  override def toString = {
-    s"WarnAction(${ap},${msg})${super.toString}"
-  }
-}
-
 /**
  * This class helps developers to include optmizations action in their code.
  */
@@ -341,17 +226,17 @@ class OptHelper(val analyzer: Analyzer = new Analyzer) extends Logging {
 
 object OptHelper extends Logging {
 
-  private var _instances: Map[SparkContext,OptHelper] = Map.empty
+  private var _instances: Map[SparkConf,OptHelper] = Map.empty
 
-  def get(sc: SparkContext,
+  def get(conf: SparkConf,
       extraPolicies: Seq[(String,PolicyFunc)] = Seq.empty)
-    : OptHelper = _instances.get (sc) match {
+    : OptHelper = _instances.get (conf) match {
     case Some(oh) =>
       extraPolicies.foreach (p => oh.analyzer.addPolicy (p._1, p._2))
       oh
 
     case None =>
-      val logPath = sc.getConf.get ("spark.adaptive.logpath", null)
+      val logPath = conf.get ("spark.adaptive.logpath", null)
       val oh = if (logPath == null || logPath.isEmpty) {
         new OptHelper
       } else {
@@ -362,8 +247,8 @@ object OptHelper extends Logging {
         }
         new OptHelper (analyzer)
       }
-      logInfo (s"${oh} created for ${sc}")
-      _instances += (sc -> oh)
+      logInfo (s"${oh} created for ${conf}")
+      _instances += (conf -> oh)
       oh
   }
 

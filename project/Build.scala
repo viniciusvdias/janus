@@ -3,7 +3,7 @@ import Keys._
 
 object SparkExtensionsBuild extends Build {
     
-  scalaVersion in ThisBuild := "2.11.8"
+  crossScalaVersions in ThisBuild := Seq("2.10.4", "2.11.8")
   libraryDependencies in ThisBuild ++= Seq(
     "org.scalatest" %% "scalatest_2.11" % "2.2.1" % "test"
   )
@@ -11,7 +11,7 @@ object SparkExtensionsBuild extends Build {
   lazy val commonSettings = Seq(
     organization := "br.ufmg.cs",
     version := "0.1.0",
-    scalaVersion := "2.11.8"
+    crossScalaVersions := Seq("2.10.4", "2.11.8")
   )
   
   lazy val root = Project(id = "spark-extensions", base = file(".")).

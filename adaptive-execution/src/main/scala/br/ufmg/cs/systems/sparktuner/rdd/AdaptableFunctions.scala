@@ -12,13 +12,15 @@ import scala.reflect.ClassTag
 import org.apache.spark._
 import org.apache.spark.rdd.PairRDDFunctions
 
+import org.apache.spark.graphx._
+
 import java.lang.StackTraceElement
 
 object AdaptableFunctions extends Logging {
 
-  def preAdapt(sc: SparkContext, extraPolicies: (String,PolicyFunc)*) = {
+  def preAdapt(conf: SparkConf, extraPolicies: (String,PolicyFunc)*) = {
     val start = System.currentTimeMillis
-    val optHelper = OptHelper.get (sc, extraPolicies)
+    val optHelper = OptHelper.get (conf, extraPolicies)
     val finish = System.currentTimeMillis
     logInfo (s"PreAdapt executed, result = ${optHelper}; elapsed: ${finish - start} ms")
     optHelper
@@ -30,6 +32,42 @@ object AdaptableFunctions extends Logging {
   implicit def scAdaptableFuntions (sc: SparkContext) = 
     new AdaptableFunctionsSc(sc)
 
+  implicit def adaptableGraph [VD: ClassTag, ED: ClassTag]
+    (graph: Graph[VD,ED]) = new AdaptableGraph(graph)
+  
+  implicit def adaptableVertexRdd [VD: ClassTag]
+    (vrdd: VertexRDD[VD]) = new AdaptableVertexRDD(vrdd)
+
+}
+
+class AdaptableGraph[VD: ClassTag, ED: ClassTag] (graph: Graph[VD,ED]) {
+  import AdaptableFunctions.rdd2adaptableFunctions
+    
+  println (s"%%%%%%%%%% Adaptable Graph Created !!!")
+
+  def apply = {
+    import AdaptableFunctions.rdd2adaptableFunctions
+  }
+
+  def vertices: VertexRDD[VD] = {
+    println (s"%%%%%% Calling adptable vertices")
+    graph.vertices
+  }
+  
+  def edges: EdgeRDD[ED] = {
+    println (s"%%%%%% Calling adptable edges")
+    graph.edges
+  }
+
+}
+
+class AdaptableVertexRDD[VD: ClassTag] (vrdd: VertexRDD[VD]) {
+  import AdaptableFunctions.rdd2adaptableFunctions
+
+  def apply = {
+    import AdaptableFunctions.rdd2adaptableFunctions
+    println (s"%%%%%%%%%% Adaptable VertexRDD Created !!!")
+  }
 }
 
 sealed trait AdaptableFunctions extends Logging with Serializable {
@@ -60,7 +98,7 @@ sealed trait AdaptableFunctions extends Logging with Serializable {
 
 class AdaptableFunctionsSc (sc: SparkContext) extends AdaptableFunctions {
   
-  override def optHelper: OptHelper = OptHelper.get (sc)
+  override def optHelper: OptHelper = OptHelper.get (sc.getConf)
 
   def textFile(path: String,
       minPartitions: Int = sc.defaultMinPartitions): RDD[String] = {
@@ -82,9 +120,14 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
     (implicit kt: ClassTag[K], vt: ClassTag[V], ord: Ordering[K] = null)
   extends PairRDDFunctions[K,V](self) with AdaptableFunctions {
 
-  override def optHelper: OptHelper = OptHelper.get (self.sparkContext)
+  override def optHelper: OptHelper = OptHelper.get (self.sparkContext.getConf)
  
   /** override default functions to force adaptative behavior **/
+
+  override def partitionBy(partitioner: Partitioner): RDD[(K, V)] = {
+    println (s"%%%%%% hahahahahahahah")
+    partitionBy (partitioner, null)
+  }
 
   override def reduceByKey (func: (V, V) => V): RDD[(K, V)] =
     reduceByKey (func, null)
