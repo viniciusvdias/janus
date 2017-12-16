@@ -104,9 +104,9 @@ object ALSBenchmark {
     }
     val sc = new SparkContext(conf)
 
-    Logger.getRootLogger.setLevel(Level.WARN)
-    
-    val trainPre = sc.textFile(params.input + "/bm_train.train",8)
+    val appStart = System.nanoTime
+
+    val trainPre = sc.textFile(params.input + "/bm_train.train", params.numBlocks)
     val training = trainPre.map { line =>
       val f = line.split(params.delimiter)
       if (params.implicitPrefs) {
@@ -116,7 +116,7 @@ object ALSBenchmark {
       }
     }.repartition(params.numBlocks).cache()
     
-    val test = sc.textFile(params.input + "/bm_test.validate", 8).map { line =>
+    val test = sc.textFile(params.input + "/bm_test.validate", params.numBlocks).map { line =>
       val f = line.split(params.delimiter)
       if (params.implicitPrefs) {
       /*
@@ -149,6 +149,10 @@ object ALSBenchmark {
     val rmse = computeRmse(model, test, params.implicitPrefs)
     println(s"Train RMSE = " + computeRmse(model, training,params.implicitPrefs))
     println(s"Test RMSE = $rmse.")
+    
+    val appEnd = System.nanoTime
+
+    println (s"ALS took ${(appEnd - appStart).toDouble / 1000000000.0} seconds")
 
     sc.stop()
   }

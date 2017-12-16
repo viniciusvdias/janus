@@ -14,7 +14,7 @@ object SparkExtensionsBuild extends Build {
     crossScalaVersions := Seq("2.10.4", "2.11.8")
   )
   
-  lazy val root = Project(id = "spark-extensions", base = file(".")).
+  lazy val root = Project(id = "janus", base = file(".")).
     settings (commonSettings: _*).
     aggregate (common, adaptive, algorithms)
 

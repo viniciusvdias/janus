@@ -77,11 +77,14 @@ sealed trait AdaptableFunctions extends Logging with Serializable {
   def getAdptName[T](_adptName: String): String = Option(_adptName) match {
     case Some(adptName) => adptName
     case None =>
-      val stack = Thread.currentThread.getStackTrace()(1)
-      s"${stack.getMethodName}:${stack.getLineNumber}"
+      null
+      //val stack = Thread.currentThread.getStackTrace()(1)
+      //s"${stack.getMethodName}:${stack.getLineNumber}"
   }
 
-  def setAPName[T](rdd: RDD[T], adptName: String): RDD[T] = {
+  def setAPName[T](rdd: RDD[T], _adptName: String): RDD[T] = {
+    val adptName = if (_adptName != null) _adptName else rdd.name
+
     @scala.annotation.tailrec
     def setAPNameRec(rdd: RDD[_]): Unit = rdd.dependencies.head match {
       case shufDep: ShuffleDependency[_,_,_] =>
@@ -91,6 +94,7 @@ sealed trait AdaptableFunctions extends Logging with Serializable {
       case dep =>
         dep.rdd.setName (adptName)
     }
+
     setAPNameRec (rdd)
     rdd
   }
@@ -109,7 +113,6 @@ class AdaptableFunctionsSc (sc: SparkContext) extends AdaptableFunctions {
       path: String,
       minPartitions: Int,
       _adptName: String): RDD[String] = {
-    implicit val altAdptName = s"${path}-textFile"
     val adptName = getAdptName (_adptName)
     setAPName (sc.textFile (path, optHelper.getNumPartitions(minPartitions, adptName)),
       adptName)
@@ -120,12 +123,17 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
     (implicit kt: ClassTag[K], vt: ClassTag[V], ord: Ordering[K] = null)
   extends PairRDDFunctions[K,V](self) with AdaptableFunctions {
 
+  def keyTag = kt
+
+  def valueTag = vt
+
+  def keyOrd = ord
+
   override def optHelper: OptHelper = OptHelper.get (self.sparkContext.getConf)
  
   /** override default functions to force adaptative behavior **/
 
   override def partitionBy(partitioner: Partitioner): RDD[(K, V)] = {
-    println (s"%%%%%% hahahahahahahah")
     partitionBy (partitioner, null)
   }
 
@@ -142,7 +150,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
   /******/
 
   def reduceByKey (func: (V, V) => V, _adptName: String): RDD[(K, V)] = {
-    implicit val altAdptName = "ShuffledRDD-reduceByKey"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self)
     setAPName (self.reduceByKey(partitioner, func), adptName)
@@ -150,7 +157,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
 
   def reduceByKey (func: (V, V) => V, numPartitions: Int,
       _adptName: String): RDD[(K, V)] = {
-    implicit val altAdptName = "ShuffledRDD-reduceByKey"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self,
       defaultNumPartitions = numPartitions)
@@ -159,7 +165,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
 
   def aggregateByKey [U: ClassTag] (zeroValue: U, numPartitions: Int, _adptName: String)(
       seqOp: (U, V) => U, combOp: (U, U) => U): RDD[(K, U)] = {
-    implicit val altAdptName = "ShuffledRDD-aggregateByKey"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self,
       defaultNumPartitions = numPartitions)
@@ -167,7 +172,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
   }
 
   def partitionBy(partitioner: Partitioner, _adptName: String): RDD[(K, V)] = {
-    implicit val altAdptName = "ShuffledRDD-partitionBy"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self)
     setAPName (self.partitionBy (partitioner), adptName)
@@ -175,7 +179,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
 
   def join [W] (other: RDD[(K, W)], numPartitions: Int,
       _adptName: String): RDD[(K, (V, W))] = {
-    implicit val altAdptName = "CoGroupedRDD-join"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self,
       defaultNumPartitions = numPartitions)
@@ -183,7 +186,6 @@ class AdaptableFunctionsKv [K,V] (self: RDD[(K, V)])
   }
 
   def join [W] (other: RDD[(K, W)], _adptName: String): RDD[(K, (V, W))] = {
-    implicit val altAdptName = "CoGroupedRDD-join"
     val adptName = getAdptName (_adptName)
     val partitioner = optHelper.getPartitioner (adptName, prev = self)
     setAPName (self.join (other, partitioner), adptName)

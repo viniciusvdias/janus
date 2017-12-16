@@ -14,6 +14,10 @@ trait Logging {
     logger.warn (msg)
   }
 
+  protected def logDebug(msg: String): Unit = {
+    logger.debug (msg)
+  }
+
   protected def logError(msg: String): Unit = {
     logger.error (msg)
   }

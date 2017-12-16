@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.sparktuner
 import br.ufmg.cs.systems.common.Logging
 import br.ufmg.cs.systems.util.PrivateMethodExposer.p
 import br.ufmg.cs.systems.sparktuner.Analyzer.PolicyFunc
+import br.ufmg.cs.systems.sparktuner.model.RDD
 
 import org.apache.spark._
 import org.apache.spark.rdd._
@@ -27,6 +28,15 @@ sealed trait Action extends Logging {
   }
 
   def max(other: Action): Action = this
+
+  def min(other: Action): Action = {
+    max(other) match {
+      case _max if _max == this =>
+        other
+      case _ =>
+        this
+    }
+  }
 
   private var _policySrc: String = ""
 
@@ -82,7 +92,7 @@ case class UNPAction(ap: String, numPartitions: Int) extends Action {
   }
 
   override def toString = {
-    s"UNPAction(${ap},${numPartitions})${super.toString}"
+    s"UNPAction(${RDD.shortName(ap)},${numPartitions})${super.toString}"
   }
 }
 
@@ -92,7 +102,7 @@ case class UNPAction(ap: String, numPartitions: Int) extends Action {
  */
 case class UPAction(ap: String, partitionerStr: String) extends Action {
   override def toString = {
-    s"UPAction(${ap},${partitionerStr})${super.toString}"
+    s"UPAction(${RDD.shortName(ap)},${partitionerStr})${super.toString}"
   }
 }
 
@@ -113,7 +123,7 @@ case class NOAction(ap: String) extends Action {
   override def max(other: Action): Action = other
 
   override def toString = {
-    s"NOAction(${ap})${super.toString}"
+    s"NOAction(${RDD.shortName(ap)})${super.toString}"
   }
 }
 
@@ -129,6 +139,6 @@ case class WarnAction(ap: String, msg: String) extends Action {
   override def max(other: Action): Action = other
 
   override def toString = {
-    s"WarnAction(${ap},${msg})${super.toString}"
+    s"WarnAction(${RDD.shortName(ap)},${msg})${super.toString}"
   }
 }

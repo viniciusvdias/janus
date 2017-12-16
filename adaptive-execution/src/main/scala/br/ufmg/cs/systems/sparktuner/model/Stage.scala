@@ -15,10 +15,14 @@ class Stage(
     val name: String,               // stage name provided by the framework
     val numTasks: Long,             // number of tasks in this stage
     val tasks: Array[Task],         // array of tasks (for individual statistics)   
-    val parents: Array[Long],       // ids of parent RDDs
+    val parents: Array[Long],       // ids of parent Stages
     val rdds: Array[RDD],           // list of RDDs contained in this stage (exec. pipeline)
     onlyAdaptive: Boolean = false   // mechanism for excluding some points from the opt. process
   ) {
+
+  Stage.add(this)
+
+  rdds.foreach (_.setStage(this))
 
   def this(jsonData: JValue) {
     this(
@@ -27,7 +31,11 @@ class Stage(
       getValue [Long] (jsonData, "Stage Info", "Number of Tasks"),
       Array.fill (getValue [Long] (jsonData, "Stage Info", "Number of Tasks").toInt) (Task.empty),
       getValue [Seq[BigInt]] (jsonData, "Stage Info", "Parent IDs").map (_.toLong).toArray,
-      getJValue (jsonData, "Stage Info", "RDD Info").children.map (new RDD(_)).toArray
+      getJValue (jsonData, "Stage Info", "RDD Info").children.
+        map (rddData => new RDD(
+          getValue [Long] (jsonData, "Stage Info", "Stage ID"),
+          rddData)
+        ).toArray
       )
   }
 
@@ -40,9 +48,33 @@ class Stage(
   }
   
   def adaptiveRDD: RDD = {
+    // println (s"%%% ${id} rdds: ${rdds.mkString(", ")}")
     val adaptables = rdds.filter (_.isAdaptable)
+    // println (s"%%% ${id} adaptables: ${adaptables.mkString(", ")}")
     val maxScope = adaptables.map(_.scope).max
-    adaptables.filter(_.scope == maxScope).minBy (_.id)
+    // println (s"%%% ${id} maxScope: ${maxScope}")
+    val ardd = adaptables.filter(_.scope == maxScope).minBy (_.id)
+    // println (s"%%% ${id} adaptiveRDD: ${ardd}")
+    // println ()
+    // println ()
+    // println ()
+    ardd
+  }
+
+  def adaptiveRDDs: Array[RDD] = {
+    val adaptables = rdds.filter (_.isAdaptable)
+
+    var adaptablesByScope = Map.empty[Long,RDD]
+    adaptables.foreach { rdd =>
+      adaptablesByScope.get(rdd.scope) match {
+        case Some(_rdd) =>
+          adaptablesByScope += (rdd.scope -> Seq(rdd, _rdd).minBy(_.id))
+        case None =>
+          adaptablesByScope += (rdd.scope -> rdd)
+      }
+    }
+
+    adaptablesByScope.values.toArray
   }
 
   def emptyTasks: Array[Task] = tasks.filter (_.recordsRead == 0)
@@ -55,8 +87,33 @@ class Stage(
       "-"
   }
 
-  def canAdapt: Boolean =
-    !onlyAdaptive || (adaptivePoint contains "adaptive")
+  def useMem: Boolean = {
+    rdds.foreach { rdd =>
+      if (rdd.useMem) {
+        return true
+      }
+    }
+    false
+  }
+
+  def cachedParents: Boolean = {
+    parents.foreach { stageId =>
+      Stage.getOpt(stageId) match {
+        case Some(parent) =>
+          if (parent.useMem || parent.cachedParents) {
+            return true
+          }
+
+        case None =>
+      }
+    }
+    false
+  }
+
+  def canAdapt: Boolean = {
+    //!cachedParents && (!onlyAdaptive || (adaptivePoint contains "adaptive"))
+    (!onlyAdaptive || (adaptivePoint contains "adaptive"))
+  }
 
   // statistics derived from tasks
 
@@ -109,4 +166,14 @@ class Stage(
 }
 
 object Stage {
+  var stages: Map[Long,Stage] = Map.empty
+
+  def add(stage: Stage) = {
+    stages += (stage.id -> stage)
+  }
+
+  def get(stageId: Long) = stages(stageId)
+  
+  def getOpt(stageId: Long) = stages.get(stageId)
+
 }

@@ -14,6 +14,8 @@ libraryDependencies += "org.apache.spark" %% "spark-core" % "2.0.0" % "provided"
 
 libraryDependencies += "org.apache.spark" %% "spark-graphx" % "2.0.0" % "provided"
 
+libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6"
+
 libraryDependencies += "org.json4s" %% "json4s-native" % "3.3.0"
 
 libraryDependencies += "org.aspectj" % "aspectjtools" % "1.8.10"

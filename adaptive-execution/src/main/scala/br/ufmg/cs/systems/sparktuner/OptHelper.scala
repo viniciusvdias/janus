@@ -11,12 +11,19 @@ import org.apache.spark.Partitioner.defaultPartitioner
 
 import scala.reflect.ClassTag
 
+
+class JanusPartitioner(underlying: Partitioner) extends Partitioner {
+  def numPartitions: Int = underlying.numPartitions
+  def getPartition(key: Any): Int = underlying.getPartition(key)
+}
+
 /**
  * This class helps developers to include optmizations action in their code.
  */
 class OptHelper(val analyzer: Analyzer = new Analyzer) extends Logging {
 
   lazy val apToActions: Map[String,Seq[Action]] = analyzer.getActions
+  //lazy val apToActions: Map[String,Seq[Action]] = Map("ShuffledRDD-groupByKey at <console>:27" -> Seq(UNPAction("blah", 999)))
 
   private var currPos = Map.empty[String,Int].withDefaultValue (0)
 
@@ -95,7 +102,7 @@ class OptHelper(val analyzer: Analyzer = new Analyzer) extends Logging {
       point: String,
       defaultNumPartitions: Int = -1,
       prev: RDD[(K,V)] = null)(implicit altAdptName: String = null)
-    : Partitioner = apToActions.get(findAP(point)(altAdptName)) match {
+    : Partitioner = new JanusPartitioner(apToActions.get(findAP(point)(altAdptName)) match {
     
     case Some(actions) => actions(nextPos(findAP(point)(altAdptName))) match {
       case act @ NOAction(ap) if defaultNumPartitions == -1 =>
@@ -132,7 +139,7 @@ class OptHelper(val analyzer: Analyzer = new Analyzer) extends Logging {
 
     case None =>
       new HashPartitioner(defaultNumPartitions)
-  }
+  })
 
   def getNumPartitions(
       defaultNumPartitions: Int,
@@ -186,7 +193,8 @@ class OptHelper(val analyzer: Analyzer = new Analyzer) extends Logging {
   // adaptive point
 
   /** adapt CoGroupedRDD */
-  private def adaptCoGroupedRDD[K: ClassTag](point: String, rdd: CoGroupedRDD[K]) = apToActions.get (point) match {
+  private def adaptCoGroupedRDD[K: ClassTag](point: String,
+      rdd: CoGroupedRDD[K]) = apToActions.get (point) match {
     case Some(actions) =>
       val cgRdd = new CoGroupedRDD[K](rdd.rdds, getPartitionerWithNext(rdd, point)).
         setSerializer (p(rdd)('serializer)().asInstanceOf[Serializer])

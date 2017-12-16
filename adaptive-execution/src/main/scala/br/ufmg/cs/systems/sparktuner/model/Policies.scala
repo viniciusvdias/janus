@@ -68,8 +68,9 @@ object Policies {
   }
 }
 
-object LocalityPolicy extends ApplicationPolicy {
+object LocalityPolicy extends PartitioningPolicy {
 
+  private val schedDelayTarget: Int = 3
   private val replFactor: Int = 3
   private val localityTarget: Double = 0.9
 
@@ -94,6 +95,21 @@ object LocalityPolicy extends ApplicationPolicy {
     val schedDelay: Double = env.stages.map (stage => stageDelay(numExecutors, coresPerExecutor, stage)).max
     UConfAction("spark.locality.wait", s"${schedDelay/1000}s")
   }
+
+  override def adapt(env: Environment, apPoints: AdaptivePointStats): Action = {
+    val stages = apPoints.stages
+    val rdd = apPoints.rdd
+    logInfo (s"${rdd}: optimizing for locality")
+    val repr = getRepr (stages)
+    val taskRunTimes = repr.taskRunTimes
+    val numExecutors: Int = env.executors.size
+    val coresPerExecutor: Int = (env.executors.map (_.totalCores).sum / numExecutors).toInt
+    val minSchedDelay = - (numExecutors / replFactor) * ln( (1 - localityTarget) / (1 + (1 - localityTarget)) )
+    val avgTaskLength = schedDelayTarget / (minSchedDelay / coresPerExecutor)
+    val numTasks = (taskRunTimes.sum / avgTaskLength)
+    println (s"avgTaskLength=${avgTaskLength} numTasks=${numTasks}")
+    NOAction (rdd.name)
+  }
 }
 
 object EmptyTasksPolicy extends PartitioningPolicy {
@@ -102,10 +118,14 @@ object EmptyTasksPolicy extends PartitioningPolicy {
     val rdd = apPoints.rdd
     logInfo (s"${rdd}: optimizing for emptyTasks")
     val repr = getRepr (stages)
-    val emptyTasks = repr.emptyTasks
+    adaptStage(rdd, repr)
+  }
+
+  private def adaptStage(rdd: RDD, stage: Stage): Action = {
+    val emptyTasks = stage.emptyTasks
     val numEmptyTasks = emptyTasks.size
     if (numEmptyTasks > 0) {
-      UNPAction (rdd.name, (repr.numTasks - numEmptyTasks).toInt)
+      UNPAction (rdd.name, (stage.numTasks - numEmptyTasks).toInt)
     } else {
       NOAction (rdd.name)
     }
@@ -119,14 +139,18 @@ object SpillPolicy extends PartitioningPolicy {
     
     logInfo (s"${rdd}: optimizing for spill")
     val repr = getRepr (stages)
-    val runTimes = repr.taskRunTimes
-    val bytesSpilled = repr.bytesSpilled
-    val shuffleWriteBytes = repr.shuffleWriteBytes
+    adaptStage(rdd, repr)
+  }
+
+  private def adaptStage(rdd: RDD, stage: Stage): Action = {
+    val runTimes = stage.taskRunTimes
+    val bytesSpilled = stage.bytesSpilled
+    val shuffleWriteBytes = stage.shuffleWriteBytes
 
     if (shuffleWriteBytes > 0) {
       val factor = bytesSpilled / shuffleWriteBytes.toDouble
       if (factor > 0) {
-        val newNumPartitions = repr.numTasks + math.ceil (factor * repr.numTasks)
+        val newNumPartitions = stage.numTasks + math.ceil (factor * stage.numTasks)
         UNPAction (rdd.name, newNumPartitions.toInt)
       } else {
         NOAction (rdd.name)
@@ -145,12 +169,17 @@ object GCPolicy extends PartitioningPolicy {
     
     logInfo (s"${rdd}: optimizing for GC")
     val repr = getRepr (stages)
-    val gcOverheads = repr.taskGcOverheads
+    adaptStage(rdd, repr)
+  }
+
+  private def adaptStage(rdd: RDD, stage: Stage): Action = {
+    val gcOverheads = stage.taskGcOverheads
     val _skewness = skewness (gcOverheads)
+    percentileCalc.setData (gcOverheads)
+    val target = percentileCalc.evaluate (50)
 
-    if (highSkewness (_skewness)) {
+    if (target > 0 && highSkewness (_skewness)) {
 
-      val target = percentileCalc.evaluate (50)
       val newNumPartitions = gcOverheads.map (go => math.ceil(go / target).toInt max 1).sum
       UNPAction (rdd.name, newNumPartitions)
 
@@ -194,7 +223,11 @@ object TaskImbalancePolicy extends PartitioningPolicy {
     val rdd = apPoints.rdd
     logInfo (s"${rdd}: optimizing for taskImbalance")
     val repr = getRepr (stages)
-    sourceOfImbalance (repr) match {
+    adaptStage(rdd, repr)
+  }
+
+  private def adaptStage(rdd: RDD, stage: Stage): Action = {
+    sourceOfImbalance (stage) match {
       case Inherent =>
         WarnAction (rdd.name, Inherent.toString)
 

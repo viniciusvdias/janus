@@ -15,7 +15,10 @@ case class Environment(
   ) {
 
   def this(jsonData: JValue) {
-    this()
+    this(
+      getValue [Map[String,String]] (jsonData, "Spark Properties"),
+      getValue [Map[String,String]] (jsonData, "System Properties")
+    )
   }
 
   def addSystemProperty(key: String, value: String): Unit = {
@@ -36,7 +39,7 @@ case class Environment(
 
   override def toString = {
     s"Environment(numSparkProperties=${sparkProperties.size}, " +
-      s"numSystemProperties=${systemProperties})"
+      s"numSystemProperties=${systemProperties.size})"
   }
 }
 

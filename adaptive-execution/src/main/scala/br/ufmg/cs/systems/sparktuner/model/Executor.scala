@@ -10,7 +10,7 @@ import org.json4s.native.JsonMethods._
 case class Executor(
   id: String,
   host: String,
-  totalCores: Int,
+  totalCores: Long,
   var maximumMemory: Long = 0
   ) {
 
@@ -18,7 +18,7 @@ case class Executor(
     this(
       getValue [String] (jsonData, "Executor ID"),
       getValue [String] (jsonData, "Executor Info", "Host"),
-      getValue [Int] (jsonData, "Executor Info", "Total Cores")
+      getValue [Long] (jsonData, "Executor Info", "Total Cores")
       )
   }
 
