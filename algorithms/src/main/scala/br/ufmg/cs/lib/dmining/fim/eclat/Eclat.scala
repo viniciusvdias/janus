@@ -61,6 +61,7 @@ object Eclat {
       it.mkString(",") + "::" + tids.mkString(",")
     }.mkString("\t")
   }
+
   def writeItemSets[T : ClassTag](itemSetRDD: RDD[(T,Int)],
       fileName: String,
       logLevel: Level) = logLevel match {
@@ -244,8 +245,8 @@ object Eclat {
     conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
 
     // make spark context
+    preAdapt (conf)
     val sc = new SparkContext(conf)
-    preAdapt (sc)
     log.info (s"applicationId = ${sc.applicationId}")
     
     // start timer

@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.sparktuner
 
 import br.ufmg.cs.systems.common.Logging
 import br.ufmg.cs.systems.sparktuner.model._
+import br.ufmg.cs.systems.sparktuner.model.Policies._
 
 import org.json4s._
 import org.json4s.native.JsonMethods._
@@ -20,20 +21,32 @@ class Analyzer(logPath: String = "",
   import Analyzer._
 
   logInfo (s"Analyzer initialized from ${logPath}")
-  
+
   // parse log file (fill model)
-  private val stages: Seq[(RDD,List[Stage])] = groupByRDD (parseLogFile).
+  val (environment, rawStages) = parseLogFile
+  private val stages: Seq[(RDD,List[Stage])] = groupByRDD (rawStages).
     toSeq.sortBy (_._1.id)
 
-  private var dependencies: Map[String,Option[String]] = _
+  private var dependencies: Map[String,Set[String]] = _
 
   /** policies for optimization **/
   private var _policies: Seq[(String,PolicyFunc)] = Seq(
-    ("empty-tasks", optForEmptyTasks),
-    ("spill", optForSpill),
-    ("garbage-collection", optForGc),
-    ("task-imbalance", optForTaskImbalance)
+    //("empty-tasks", optForEmptyTasks),
+    //("spill", optForSpill),
+    //("garbage-collection", optForGc)
+    //("task-imbalance", optForTaskImbalance)
     //("fetch-wait-time", optForFetchWaitTime),
+    )
+
+  private var _aPolicies: Seq[(String,ApplicationPolicy)] = Seq(
+    // ("locality-policy", LocalityPolicy)
+    )
+
+  private var _pPolicies: Seq[(String,PartitioningPolicy)] = Seq(
+    //("locality-policy", LocalityPolicy)
+    ("empty-tasks", EmptyTasksPolicy),
+    ("spill", SpillPolicy),
+    ("garbage-collection", GCPolicy)
     )
 
   /**
@@ -51,7 +64,9 @@ class Analyzer(logPath: String = "",
     _policies = _policies :+ ( (name, func) )
   }
 
-  def policies = _policies
+  // def policies = _policies
+  def policies = _pPolicies
+  def aPolicies = _aPolicies
 
   private def skewness(values: Array[Long]): Double =
     skewness (values.map(_.toDouble))
@@ -83,11 +98,39 @@ class Analyzer(logPath: String = "",
     stages.maxBy (_.id)
 
   def getActions: Map[String,Seq[Action]] = {
+
+    /**
+     * Application Policies
+     */
+    // { TODO: apply application actions
+    var appActions: Seq[Action] = Seq.empty[Action]
+    for ((polName, appPol) <- aPolicies.iterator)
+      appActions = appPol.beforeExecution(environment) +: appActions
+
+    logInfo (s"ApplicationActions: ${appActions}")
+    // }
+
+    /**
+     * Partitioning Policies
+     */
     val iteratives = isIterative
     val regulars = isRegular
 
-    logInfo (s"iteratives: ${iteratives}")
-    logInfo (s"regulars: ${regulars}")
+    val nonIteratives = (iteratives.keys ++ regulars.keys).filter { ap =>
+      !isIterative(ap)
+    }
+    nonIteratives.foreach (ap => assert (isRegular(ap)))
+    nonIteratives.foreach (ap => logInfo(s"NonIterative: ${ap}"))
+
+    val iterativeRegulars = (iteratives.keys ++ regulars.keys).filter { ap =>
+      isIterative(ap) && isRegular(ap)
+    }
+    iterativeRegulars.foreach (ap => logInfo(s"IterativeRegular: ${ap}"))
+
+    val iterativeIrregulars = (iteratives.keys ++ regulars.keys).filter { ap =>
+      isIterative(ap) && !isRegular(ap)
+    }
+    iterativeIrregulars.foreach (ap => logInfo(s"IterativeIrregular: ${ap}"))
 
     // separate by categories
     var apPoints = Map.empty[String,Seq[(RDD,List[Stage])]].
@@ -122,16 +165,29 @@ class Analyzer(logPath: String = "",
       }
     }
 
-    handleDependencies(allActions).map {case (ap,actions) => (ap,actions :+ NOAction("wildcard"))}
+    // logInfo(s"AllActions: ${allActions}")
+    dependencies.foreach {case (k,v) => logInfo(s"Dependency: ${k} :: ${v}")}
+
+    handleDependencies(allActions).map {case (ap,actions) => 
+      (ap,actions :+ NOAction("__placeholder__"))
+    }
   }
 
   private def handleDependencies(allActions: Map[String,Seq[Action]]) = {
     allActions.map { case (ap,actions) => dependencies(ap) match {
-      case Some(dep) =>
-        (ap ->
-          actions.zip (allActions(dep)).map {case (a1,a2) => a1 max a2})
-      case None =>
+      case deps if deps.isEmpty =>
         (ap -> actions)
+      case deps =>
+        var reducedActions = actions
+        deps.foreach { dep =>
+          var i = 0
+          while (i < reducedActions.size && i < allActions(dep).size) {
+            reducedActions = reducedActions.updated(i, reducedActions(i) max allActions(dep)(i))
+            i += 1
+          }
+        }
+
+        (ap -> reducedActions)
     }
     }
   }
@@ -166,7 +222,6 @@ class Analyzer(logPath: String = "",
         actions += (rdd.name -> (apActions.dropRight(1) :+ lastAction :+ lastAction))
         numRdds = repr.rdds.size
 
-
       case (None, repr) =>
         val _actions = optNoniterative (Seq((rdd,stages)))
         actions += (rdd.name -> _actions.values.head)
@@ -187,20 +242,30 @@ class Analyzer(logPath: String = "",
         val repr = getRepr (stages)
         val factor = repr.recordsRead / fi.toDouble
         val firstAction = apActions.head
+        //val action = firstAction.scaled (factor min 2.0)
         val action = firstAction.scaled (factor)
-        actions += (rdd.name -> (apActions :+ action))
+        val _action = optNoniterative (Seq((rdd,stages))).values.head.head
+        actions += (rdd.name -> (apActions :+ (action min _action)))
 
       case _ => // first iteration
         val repr = getRepr (stages)
         val _actions = optNoniterative (Seq((rdd,stages)))
         val newActions = _actions.values.head match {
           case NOAction(ap) +: tail =>
-            UNPAction (ap, repr.numTasks.toInt).
-              setOldNumPartitions (repr.numTasks.toInt) +: tail
-          case acts => acts
+            NOAction(ap) +: tail
+          case acts =>
+            firstInput += (rdd.name -> repr.recordsRead)
+            logInfo (s"firstName: ${repr.name}")
+            acts
+
+          //case NOAction(ap) +: tail =>
+          //  UNPAction (ap, repr.numTasks.toInt).
+          //    setPolicySrc ("no-action").
+          //    setOldNumPartitions (repr.numTasks.toInt) +: tail
+          //case acts => acts
         }
+        // firstInput += (rdd.name -> repr.recordsRead)
         actions += (rdd.name -> newActions)
-        firstInput += (rdd.name -> repr.recordsRead)
     }
 
     actions
@@ -208,7 +273,7 @@ class Analyzer(logPath: String = "",
 
   private def optAP(rdd: RDD, stages: List[Stage]): Action = {
     for ((name,optFunc) <- policies.iterator) {
-      val action = optFunc (rdd, stages)
+      val action = optFunc.adapt(environment, AdaptivePointStats(rdd, stages))
       if (action.valid) {
         return action.
           setPolicySrc (name).
@@ -219,140 +284,17 @@ class Analyzer(logPath: String = "",
     action
   }
 
-
-  /** Default policies */
-  private def optForEmptyTasks(rdd: RDD, stages: List[Stage]): Action = {
-    logInfo (s"${rdd}: optimizing for emptyTasks")
-    val repr = getRepr (stages)
-    val emptyTasks = repr.emptyTasks
-    val numEmptyTasks = emptyTasks.size
-    if (numEmptyTasks > 0) {
-      UNPAction (rdd.name, (repr.numTasks - numEmptyTasks).toInt)
-    } else {
-      NOAction (rdd.name)
-    }
-  }
-
-  private def optForSpill(rdd: RDD, stages: List[Stage]): Action = {
-    logInfo (s"${rdd}: optimizing for spill")
-    val repr = getRepr (stages)
-    val runTimes = repr.taskRunTimes
-    val bytesSpilled = repr.taskBytesSpilled
-    val shuffleWriteBytes = repr.shuffleWriteBytes
-    if (shuffleWriteBytes > 0) {
-      val factor = repr.bytesSpilled / shuffleWriteBytes.toDouble
-      if (factor > 0) {
-        val newNumPartitions = repr.numTasks + math.ceil (factor * repr.numTasks)
-        UNPAction (rdd.name, newNumPartitions.toInt)
-      } else {
-        NOAction (rdd.name)
-      }
-    } else {
-      NOAction (rdd.name)
-    }
-  }
-
-  private def optForFetchWaitTime(rdd: RDD, stages: List[Stage]): Action = {
-    logInfo (s"${rdd}: optimizing for Fetch Wait Time")
-    val repr = getRepr (stages)
-    val fetchWaitTimes = repr.taskFetchWaitTimes
-    val blockedReadOverheads = repr.taskBlockedReadOverheads
-    val runTimes = repr.taskRunTimes
-
-    val above = blockedReadOverheads.filter(_ > 0.8)
-
-    if (!above.isEmpty) {
-
-      val newNumPartitions = repr.numTasks + above.size*2
-      UNPAction (rdd.name, newNumPartitions.toInt)
-
-    } else {
-      NOAction (rdd.name)
-    }
-  }
-
-  private def optForGc(rdd: RDD, stages: List[Stage]): Action = {
-    logInfo (s"${rdd}: optimizing for GC")
-    val repr = getRepr (stages)
-    val runTimes = repr.taskRunTimes
-    val gcTimes = repr.taskGcTimes
-    val gcOverheads = repr.taskGcOverheads
-    val _skewness = skewness (gcOverheads)
-    percentileCalc.setData (gcOverheads)
-
-    val q2 = percentileCalc.evaluate (50)
-    val q1 = percentileCalc.evaluate (25)
-    val q3 = percentileCalc.evaluate (75)
-    val percentiles = List(q2, q3).filter (_ > 0)
-    
-    if (highSkewness (_skewness) && !percentiles.isEmpty) {
-
-      val target = percentiles.min
-      val newNumPartitions = gcOverheads.map (go => math.ceil(go / target).toInt max 1).sum
-      UNPAction (rdd.name, newNumPartitions)
-
-    } else {
-      NOAction (rdd.name)
-    }
-  }
-
-  /**
-   * The following classes represent the possible causes for task imbalance.
-   * These facts help us to determine the best set of actions to take
-   */
-  private sealed trait SourceOfImbalance
-  private case object NoImbalance extends SourceOfImbalance
-  private case object KeyDist extends SourceOfImbalance
-  private case object Inherent extends SourceOfImbalance
-  private case object VariableCost extends SourceOfImbalance
-
-  private def sourceOfImbalance(stage: Stage): SourceOfImbalance = {
-    val runTimes = stage.taskRunTimes
-    val _skewness = skewness (runTimes)
-    logInfo (s"Imbalance skewness ${_skewness}")
-    if (!highSkewness(_skewness)) return NoImbalance
-
-
-    val corr1 = correlation (runTimes, stage.taskShuffleReadBytes)
-    val corr2 = correlation (runTimes, stage.taskShuffleReadRecords)
-    logInfo (s"Correlation between Runtime and ShuffleReadBytes: ${corr1}")
-    logInfo (s"Correlation between Runtime and ShuffleReadRecords: ${corr2}")
-    (highCorrelation (corr1), highCorrelation (corr2)) match {
-      case (true, true) => KeyDist
-      case (false, false) => Inherent
-      case _ => VariableCost
-    }
-  }
-
-  private def optForTaskImbalance(rdd: RDD, stages: List[Stage]): Action = {
-    logInfo (s"${rdd}: optimizing for taskImbalance")
-    val repr = getRepr (stages)
-    sourceOfImbalance (repr) match {
-      case Inherent =>
-        WarnAction (rdd.name, Inherent.toString)
-
-      case KeyDist =>
-        UPAction (rdd.name, "rangePartitioner")
-
-      case VariableCost =>
-        WarnAction (rdd.name, VariableCost.toString)
-        
-      case NoImbalance =>
-        NOAction (rdd.name)
-    }
-  }
-  /*****/
-
   private def isIterative: Map[String,Boolean] = {
     var iterative = Map.empty[String,Int].withDefaultValue (0)
     for ((rdd,stages) <- stages.iterator)
-      iterative += (rdd.name -> (iterative(rdd.name) + 1))
+      //iterative += (rdd.name -> (iterative(rdd.name) + 1))
+      iterative += (rdd.name -> (iterative(rdd.name) + stages.size))
     iterative.mapValues (_ > 1)
   }
 
   private def isRegular: Map[String,Boolean] = {
     var regular = Map.empty[String,Map[String,Long]]
-
+      
     for ((rdd,stages) <- stages.iterator) {
       val recordsRead = stages.map (s => (s.name,s.recordsRead)).toMap
 
@@ -380,31 +322,35 @@ class Analyzer(logPath: String = "",
   private def groupByRDD(stages: Map[Long,Stage]) = {
     var grouped = Map.empty[RDD,List[Stage]].withDefaultValue (Nil)
 
-    dependencies = Map.empty[String,Option[String]].withDefaultValue (None)
+    dependencies = Map.empty[String,Set[String]].withDefaultValue (Set())
 
     for ((stageId,stage) <- stages.iterator) if (stage.canAdapt) {
-      val adptRDD = stage.adaptiveRDD
-      grouped += (adptRDD -> (stage :: grouped(adptRDD)))
 
-      val possibleDeps = stage.rdds.filter (_ != adptRDD)
-      if (!possibleDeps.isEmpty) {
-        val firstRDD = possibleDeps.minBy (_.id)
-        if (adptRDD.scope != firstRDD.scope &&
-              firstRDD.isAdaptable && (grouped.keys.toSet contains firstRDD)) {
-          // two way
-          dependencies += (adptRDD.name -> Some(firstRDD.name))
-          dependencies += (firstRDD.name -> Some(adptRDD.name))
+      val adaptiveRDDs = stage.adaptiveRDDs
+      logInfo (s"stageId=${stageId}: ${adaptiveRDDs.mkString(", ")}")
+      var i = 0
+      while (i < adaptiveRDDs.length) {
+        var j = i + 1
+        while (j < adaptiveRDDs.length) {
+          dependencies += (adaptiveRDDs(i).name ->
+            (dependencies(adaptiveRDDs(i).name) + adaptiveRDDs(j).name))
+          dependencies += (adaptiveRDDs(j).name ->
+            (dependencies(adaptiveRDDs(j).name) + adaptiveRDDs(i).name))
+          j += 1
         }
+        grouped += (adaptiveRDDs(i) -> (stage :: grouped(adaptiveRDDs(i))))
+        i += 1
       }
     }
 
     grouped
   }
 
-  private def parseLogFile: Map[Long,Stage] = {
+  private def parseLogFile: (Environment, Map[Long,Stage]) = {
     var stages = Map.empty[Long,Stage]
+    var env: Environment = null.asInstanceOf[Environment]
     if (logPath.isEmpty)
-      return stages
+      return (env, stages)
 
     val source = try {
       Source.fromFile (new URI(logPath))
@@ -420,6 +366,17 @@ class Analyzer(logPath: String = "",
       val jsonData = parse (strInput, false, false)
 
       jsonData \ "Event" match {
+        case JString("SparkListenerEnvironmentUpdate") =>
+          env = new Environment(jsonData)
+
+        case JString("SparkListenerExecutorAdded") =>
+          val executor = new Executor(jsonData)
+
+          // In Spark logs the driver is also considered an executor, we must
+          // account for that
+          if (executor.id != "driver") {
+            env.addExecutor(executor)
+          }
 
         case JString("SparkListenerTaskEnd") =>
           val task = new Task(jsonData)
@@ -429,12 +386,13 @@ class Analyzer(logPath: String = "",
           val stage = new Stage(jsonData)
           if (!(stages contains stage.id))
             stages += (stage.id -> stage)
+          env.addStage(stage)
 
         case _ =>
       }
     }
 
-    stages
+    (env, stages)
   }
 
 }
@@ -458,8 +416,13 @@ object Analyzer extends Logging {
   def main (args: Array[String]) {
     val logPath = args(0)
     val actions = new Analyzer (logPath).getActions
-    logInfo (
-      s"Actions: ${actions.map (kv => s"${kv._1}\n\t${kv._2.mkString("\n\t")}").mkString("\n")}")
+    actions.foreach { case (adptPoint, actions) =>
+      logInfo("")
+      actions.foreach (action =>
+        logInfo(s"OutputAction: ${RDD.shortName(adptPoint)}: ${action}")
+      )
+      logInfo("")
+    }
   }
 
   /**
@@ -494,7 +457,8 @@ object Analyzer extends Logging {
    * We consider fairly constant stages instead exactly equal ones 
    * to account for small measure deviations.
    */
-  def equivInputs (subset: Map[String,Long], superset: Map[String,Long]): Boolean = {
+  def equivInputs (subset: Map[String,Long],
+      superset: Map[String,Long]): Boolean = {
     for ((k,v) <- subset) superset.get(k) match {
       case Some(_v) if _v > v =>
         if ( (v / _v.toDouble) < 0.9 ) // TODO: not fairly constant

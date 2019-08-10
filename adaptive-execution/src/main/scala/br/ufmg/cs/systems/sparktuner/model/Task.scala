@@ -16,6 +16,8 @@ class Task(
     val stageId: Long,              // identifies the stage of this task
     val idx: Long,                  // task ID within the stage (0 until numPartitions - 1)
     val executorId: String,         // identifies the executor that ran this task
+    val host: String,               // identifies the host that has the executor that ran this task
+    val locality: String,               // identifies the host that has the executor that ran this task
     val runTime: Long,              // total execution time
     val gcTime: Long,               // time in which the executor was GCing while running this task
     val inputRecords: Long,         // number of input records (hdfs or caching)
@@ -36,6 +38,8 @@ class Task(
       getValue [Long] (taskData, "Stage ID"),
       getValue [Long] (taskData, "Task Info", "Index"),
       getValue [String] (taskData, "Task Info", "Executor ID"),
+      getValue [String] (taskData, "Task Info", "Host"),
+      getValue [String] (taskData, "Task Info", "Locality"),
       getValue [Long] (taskData, "Task Metrics", "Executor Run Time"),
       getValue [Long] (taskData, "Task Metrics", "JVM GC Time"),
       getValue [Long] (taskData, "Task Metrics", "Input Metrics", "Records Read"),
@@ -71,5 +75,5 @@ class Task(
 }
 
 object Task {
-  lazy val empty: Task = new Task(0,0,null,0,0,0,0,0,0,0,0,0,0,0)
+  lazy val empty: Task = new Task(0,0,null,null,null,0,0,0,0,0,0,0,0,0,0,0)
 }

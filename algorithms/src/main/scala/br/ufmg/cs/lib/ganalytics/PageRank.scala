@@ -45,8 +45,8 @@ class SparkPageRank (inputFile: String,
   def run {
 
     val conf = new SparkConf().setAppName("SparkPageRank")
+    preAdapt (conf)
     val sc = Option(_sc).getOrElse (new SparkContext(conf))
-    preAdapt (sc)
 
     val lines = sc.textFile(inputFile, numPartitions(0),
       "adaptive-point-input")
